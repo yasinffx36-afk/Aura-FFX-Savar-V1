@@ -7,6 +7,7 @@ import time
 import tempfile
 import telebot
 from flask import Flask
+import cloudscraper
 
 app = Flask(__name__)
 
@@ -41,7 +42,6 @@ def get_audio_caption():
     return caption
 
 def download_file(url, filepath):
-    import cloudscraper
     scraper = cloudscraper.create_scraper()
     response = scraper.get(url, stream=True)
     response.raise_for_status()
@@ -63,12 +63,18 @@ def handle_message(message):
         time.sleep(0.5)
         bot.edit_message_text("████▒▒▒▒▒▒ 40% Loading...", chat_id=message.chat.id, message_id=msg.message_id)
         
-        api_url = "https://www.tikwm.com/api/?url=" + urllib.parse.quote(url) + "&hd=1"
-        import cloudscraper
+        # Use POST request to bypass Cloudflare caching/WAF
+        api_url = "https://www.tikwm.com/api/"
         scraper = cloudscraper.create_scraper()
-        resp = scraper.get(api_url)
-        data = resp.json()
+        resp = scraper.post(api_url, data={'url': url, 'hd': 1})
         
+        try:
+            data = resp.json()
+        except Exception:
+            # Fallback if JSON decoding fails
+            bot.edit_message_text("Server returned invalid response. Cloudflare is blocking the bot.", chat_id=message.chat.id, message_id=msg.message_id)
+            return
+            
         if data.get('code') != 0:
             bot.edit_message_text(f"Failed to get video. Error: {data.get('msg')}", chat_id=message.chat.id, message_id=msg.message_id)
             return
