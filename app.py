@@ -50,14 +50,13 @@ def handle_message(message):
     
     try:
         import time
-        time.sleep(0.5)
-        bot.edit_message_text("████▒▒▒▒▒▒ 40% Downloading Video...", chat_id=message.chat.id, message_id=msg.message_id)
+        bot.edit_message_text("█████▒▒▒▒▒ 50% Downloading...", chat_id=message.chat.id, message_id=msg.message_id)
         
-        # Use yt-dlp to download video and get title
+        # Use yt-dlp to download BOTH video and audio in a single run to save time
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Download video
-            vid_template = os.path.join(tmpdir, "%(title)s.%(ext)s")
-            subprocess.run(['yt-dlp', '--impersonate', 'chrome', url, '-o', vid_template], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            template = os.path.join(tmpdir, "%(title)s_%(format_id)s.%(ext)s")
+            # -f "best,bestaudio" tells yt-dlp to download both without restarting
+            subprocess.run(['yt-dlp', '--impersonate', 'chrome', url, '-f', 'best,bestaudio', '-o', template], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             
             # Find the downloaded video file
             downloaded_vids = glob.glob(os.path.join(tmpdir, "*.mp4"))
@@ -66,23 +65,18 @@ def handle_message(message):
                 return
             vid_filepath = downloaded_vids[0]
             
-            # Extract title from filename (removing the extension)
+            # Extract title from filename
             filename = os.path.basename(vid_filepath)
-            title = os.path.splitext(filename)[0]
-            # Remove the ID part [12345] at the end if it exists (yt-dlp sometimes adds it)
+            # Remove extension and the format_id (which is usually after the last underscore)
+            title = os.path.splitext(filename)[0].rsplit('_', 1)[0]
+            # Remove the ID part [12345] at the end if it exists
             import re
             title = re.sub(r'\s*\[\d+\]$', '', title)
             
-            time.sleep(0.5)
-            bot.edit_message_text("███████▒▒▒ 75% Downloading Audio...", chat_id=message.chat.id, message_id=msg.message_id)
-            
-            # Download audio separately
-            aud_template = os.path.join(tmpdir, "audio.%(ext)s")
-            subprocess.run(['yt-dlp', '--impersonate', 'chrome', url, '-f', 'bestaudio', '-o', aud_template], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            downloaded_auds = glob.glob(os.path.join(tmpdir, "audio.*"))
+            # Find the audio file
+            downloaded_auds = glob.glob(os.path.join(tmpdir, "*.mp3")) or glob.glob(os.path.join(tmpdir, "*.m4a"))
             aud_filepath = downloaded_auds[0] if downloaded_auds else None
             
-            time.sleep(0.5)
             bot.edit_message_text("██████████ 100%\n\n💥 𝐁𝐎𝐎𝐌! 💥", chat_id=message.chat.id, message_id=msg.message_id)
             
             with open(vid_filepath, 'rb') as video_file:
