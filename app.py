@@ -121,20 +121,19 @@ def handle_message(message):
                 
                 if video_url:
                     vid_path = os.path.join(tmpdir, "video.mp4")
-                    r = requests.get(video_url, stream=True, impersonate="chrome110")
+                    # For curl_cffi, it's safer to just fetch the content instead of using iter_content chunking
+                    r = requests.get(video_url, impersonate="chrome110")
                     with open(vid_path, 'wb') as f:
-                        for chunk in r.iter_content(chunk_size=8192):
-                            f.write(chunk)
+                        f.write(r.content)
                     
                     with open(vid_path, 'rb') as f:
                         bot.send_video(message.chat.id, f, caption=get_video_caption(title))
                         
                 if audio_url:
                     aud_path = os.path.join(tmpdir, "audio.mp3")
-                    r = requests.get(audio_url, stream=True, impersonate="chrome110")
+                    r = requests.get(audio_url, impersonate="chrome110")
                     with open(aud_path, 'wb') as f:
-                        for chunk in r.iter_content(chunk_size=8192):
-                            f.write(chunk)
+                        f.write(r.content)
                     
                     with open(aud_path, 'rb') as f:
                         bot.send_audio(message.chat.id, f, caption=get_audio_caption(), title="Original Audio", performer="TikTok")
