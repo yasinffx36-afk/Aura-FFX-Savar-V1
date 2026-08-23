@@ -1,13 +1,10 @@
 import os
 import threading
-import urllib.request
-import urllib.parse
-import json
-import time
 import tempfile
 import telebot
+import subprocess
+import glob
 from flask import Flask
-import cloudscraper
 
 app = Flask(__name__)
 
@@ -41,14 +38,6 @@ def get_audio_caption():
     )
     return caption
 
-def download_file(url, filepath):
-    scraper = cloudscraper.create_scraper()
-    response = scraper.get(url, stream=True)
-    response.raise_for_status()
-    with open(filepath, 'wb') as f:
-        for chunk in response.iter_content(chunk_size=8192):
-            f.write(chunk)
-
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     url = message.text.strip()
@@ -60,64 +49,53 @@ def handle_message(message):
     msg = bot.reply_to(message, "▒▒▒▒▒▒▒▒▒▒ 0% Loading...")
     
     try:
+        import time
         time.sleep(0.5)
-        bot.edit_message_text("████▒▒▒▒▒▒ 40% Loading...", chat_id=message.chat.id, message_id=msg.message_id)
+        bot.edit_message_text("████▒▒▒▒▒▒ 40% Downloading Video...", chat_id=message.chat.id, message_id=msg.message_id)
         
-        # Use POST request to bypass Cloudflare caching/WAF
-        api_url = "https://www.tikwm.com/api/"
-        scraper = cloudscraper.create_scraper()
-        resp = scraper.post(api_url, data={'url': url, 'hd': 1})
-        
-        try:
-            data = resp.json()
-        except Exception:
-            # Fallback if JSON decoding fails
-            bot.edit_message_text("Server returned invalid response. Cloudflare is blocking the bot.", chat_id=message.chat.id, message_id=msg.message_id)
-            return
+        # Use yt-dlp to download video and get title
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Download video
+            vid_template = os.path.join(tmpdir, "%(title)s.%(ext)s")
+            subprocess.run(['yt-dlp', url, '-o', vid_template], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             
-        if data.get('code') != 0:
-            bot.edit_message_text(f"Failed to get video. Error: {data.get('msg')}", chat_id=message.chat.id, message_id=msg.message_id)
-            return
-
-        time.sleep(0.5)
-        bot.edit_message_text("███████▒▒▒ 75% Loading...", chat_id=message.chat.id, message_id=msg.message_id)
-        
-        video_url = data['data'].get('hdplay') or data['data'].get('play')
-        audio_url = data['data'].get('music')
-        title = data['data'].get('title', 'TikTok Video')
-        
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp_vid:
-            vid_filepath = tmp_vid.name
-        download_file(video_url, vid_filepath)
-        
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_aud:
-            aud_filepath = tmp_aud.name
-        if audio_url:
-            download_file(audio_url, aud_filepath)
+            # Find the downloaded video file
+            downloaded_vids = glob.glob(os.path.join(tmpdir, "*.mp4"))
+            if not downloaded_vids:
+                bot.edit_message_text("Failed to download video.", chat_id=message.chat.id, message_id=msg.message_id)
+                return
+            vid_filepath = downloaded_vids[0]
             
-        time.sleep(0.5)
-        bot.edit_message_text("██████████ 100%\n\n💥 𝐁𝐎𝐎𝐌! 💥", chat_id=message.chat.id, message_id=msg.message_id)
-        
-        with open(vid_filepath, 'rb') as video_file:
-            bot.send_video(message.chat.id, video_file, caption=get_video_caption(title))
+            # Extract title from filename (removing the extension)
+            filename = os.path.basename(vid_filepath)
+            title = os.path.splitext(filename)[0]
+            # Remove the ID part [12345] at the end if it exists (yt-dlp sometimes adds it)
+            import re
+            title = re.sub(r'\s*\[\d+\]$', '', title)
             
-        if audio_url:
-            with open(aud_filepath, 'rb') as audio_file:
-                performer = "Unknown artist"
-                if data.get('data') and data['data'].get('music_info'):
-                     performer = data['data']['music_info'].get('author', 'Unknown artist')
-                audio_title = "Original Audio"
-                bot.send_audio(message.chat.id, audio_file, caption=get_audio_caption(), title=audio_title, performer=performer)
-        
-        os.remove(vid_filepath)
-        if audio_url:
-            os.remove(aud_filepath)
+            time.sleep(0.5)
+            bot.edit_message_text("███████▒▒▒ 75% Downloading Audio...", chat_id=message.chat.id, message_id=msg.message_id)
             
-        bot.delete_message(message.chat.id, msg.message_id)
-        
+            # Download audio separately
+            aud_template = os.path.join(tmpdir, "audio.%(ext)s")
+            subprocess.run(['yt-dlp', url, '-f', 'bestaudio', '-o', aud_template], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            downloaded_auds = glob.glob(os.path.join(tmpdir, "audio.*"))
+            aud_filepath = downloaded_auds[0] if downloaded_auds else None
+            
+            time.sleep(0.5)
+            bot.edit_message_text("██████████ 100%\n\n💥 𝐁𝐎𝐎𝐌! 💥", chat_id=message.chat.id, message_id=msg.message_id)
+            
+            with open(vid_filepath, 'rb') as video_file:
+                bot.send_video(message.chat.id, video_file, caption=get_video_caption(title))
+                
+            if aud_filepath:
+                with open(aud_filepath, 'rb') as audio_file:
+                    bot.send_audio(message.chat.id, audio_file, caption=get_audio_caption(), title="Original Audio", performer="Unknown artist")
+            
+            bot.delete_message(message.chat.id, msg.message_id)
+            
     except Exception as e:
         bot.edit_message_text(f"An error occurred: {str(e)}\nPlease try again later.", chat_id=message.chat.id, message_id=msg.message_id)
-
 
 def run_bot():
     bot.infinity_polling()
