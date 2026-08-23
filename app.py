@@ -52,10 +52,20 @@ def handle_message(message):
     try:
         bot.edit_message_text("█████▒▒▒▒▒ 50% Downloading media...", chat_id=message.chat.id, message_id=msg.message_id)
         
-        # Use tikwm API for much faster processing and image support
-        api_url = f"https://www.tikwm.com/api/?url={requests.utils.quote(url)}&hd=1"
-        res = requests.get(api_url, headers={'User-Agent': 'Mozilla/5.0'}).json()
+        # Use tikwm API via POST to avoid parsing errors
+        api_url = "https://www.tikwm.com/api/"
+        response = requests.post(
+            api_url,
+            data={'url': url, 'hd': 1},
+            headers={'User-Agent': 'Mozilla/5.0'}
+        )
         
+        try:
+            res = response.json()
+        except ValueError:
+            bot.edit_message_text("API Error: Invalid response from server. Please try again later.", chat_id=message.chat.id, message_id=msg.message_id)
+            return
+            
         if res.get('code') != 0:
             bot.edit_message_text(f"API Error: {res.get('msg', 'Failed to fetch details.')}", chat_id=message.chat.id, message_id=msg.message_id)
             return
