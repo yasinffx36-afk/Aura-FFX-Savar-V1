@@ -41,8 +41,9 @@ def get_audio_caption():
     return caption
 
 def download_file(url, filepath):
-    import requests
-    response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, stream=True)
+    import cloudscraper
+    scraper = cloudscraper.create_scraper()
+    response = scraper.get(url, stream=True)
     response.raise_for_status()
     with open(filepath, 'wb') as f:
         for chunk in response.iter_content(chunk_size=8192):
@@ -63,8 +64,9 @@ def handle_message(message):
         bot.edit_message_text("████▒▒▒▒▒▒ 40% Loading...", chat_id=message.chat.id, message_id=msg.message_id)
         
         api_url = "https://www.tikwm.com/api/?url=" + urllib.parse.quote(url) + "&hd=1"
-        import requests
-        resp = requests.get(api_url, headers={'User-Agent': 'Mozilla/5.0'})
+        import cloudscraper
+        scraper = cloudscraper.create_scraper()
+        resp = scraper.get(api_url)
         data = resp.json()
         
         if data.get('code') != 0:
