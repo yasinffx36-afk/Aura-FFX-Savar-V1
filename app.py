@@ -37,7 +37,7 @@ def get_audio_caption():
     return caption
 
 from telebot.types import InputMediaPhoto
-import requests
+from curl_cffi import requests
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
@@ -58,7 +58,8 @@ def handle_message(message):
         encoded_url = urllib.parse.quote(url, safe='')
         api_url = f"https://www.tikwm.com/api/?url={encoded_url}&hd=1"
         
-        response = requests.get(api_url, headers={'User-Agent': 'Mozilla/5.0'})
+        # Use curl_cffi to bypass Cloudflare/Anti-bot blocks on the API
+        response = requests.get(api_url, impersonate="chrome110")
         
         try:
             res = response.json()
@@ -84,7 +85,7 @@ def handle_message(message):
                 
                 for i, img_url in enumerate(images):
                     img_path = os.path.join(tmpdir, f"img_{i}.jpg")
-                    r = requests.get(img_url)
+                    r = requests.get(img_url, impersonate="chrome110")
                     with open(img_path, 'wb') as f:
                         f.write(r.content)
                     
@@ -107,7 +108,7 @@ def handle_message(message):
                 audio_url = data.get('music')
                 if audio_url:
                     aud_path = os.path.join(tmpdir, "audio.mp3")
-                    r = requests.get(audio_url)
+                    r = requests.get(audio_url, impersonate="chrome110")
                     with open(aud_path, 'wb') as f:
                         f.write(r.content)
                     with open(aud_path, 'rb') as f:
@@ -120,7 +121,7 @@ def handle_message(message):
                 
                 if video_url:
                     vid_path = os.path.join(tmpdir, "video.mp4")
-                    r = requests.get(video_url, stream=True)
+                    r = requests.get(video_url, stream=True, impersonate="chrome110")
                     with open(vid_path, 'wb') as f:
                         for chunk in r.iter_content(chunk_size=8192):
                             f.write(chunk)
@@ -130,7 +131,7 @@ def handle_message(message):
                         
                 if audio_url:
                     aud_path = os.path.join(tmpdir, "audio.mp3")
-                    r = requests.get(audio_url, stream=True)
+                    r = requests.get(audio_url, stream=True, impersonate="chrome110")
                     with open(aud_path, 'wb') as f:
                         for chunk in r.iter_content(chunk_size=8192):
                             f.write(chunk)
