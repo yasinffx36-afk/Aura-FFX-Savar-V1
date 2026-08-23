@@ -40,6 +40,14 @@ def get_audio_caption():
     )
     return caption
 
+def download_file(url, filepath):
+    import requests
+    response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, stream=True)
+    response.raise_for_status()
+    with open(filepath, 'wb') as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            f.write(chunk)
+
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     url = message.text.strip()
@@ -48,24 +56,21 @@ def handle_message(message):
         bot.reply_to(message, "Please send a valid TikTok link.")
         return
         
-    # Loading animation
     msg = bot.reply_to(message, "▒▒▒▒▒▒▒▒▒▒ 0% Loading...")
     
     try:
-        # Step 1
         time.sleep(0.5)
         bot.edit_message_text("████▒▒▒▒▒▒ 40% Loading...", chat_id=message.chat.id, message_id=msg.message_id)
         
         api_url = "https://www.tikwm.com/api/?url=" + urllib.parse.quote(url) + "&hd=1"
-        req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
-        response = urllib.request.urlopen(req).read().decode('utf-8')
-        data = json.loads(response)
+        import requests
+        resp = requests.get(api_url, headers={'User-Agent': 'Mozilla/5.0'})
+        data = resp.json()
         
         if data.get('code') != 0:
             bot.edit_message_text(f"Failed to get video. Error: {data.get('msg')}", chat_id=message.chat.id, message_id=msg.message_id)
             return
 
-        # Step 2
         time.sleep(0.5)
         bot.edit_message_text("███████▒▒▒ 75% Loading...", chat_id=message.chat.id, message_id=msg.message_id)
         
@@ -73,46 +78,37 @@ def handle_message(message):
         audio_url = data['data'].get('music')
         title = data['data'].get('title', 'TikTok Video')
         
-        # Download video
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp_vid:
             vid_filepath = tmp_vid.name
-        urllib.request.urlretrieve(video_url, vid_filepath)
+        download_file(video_url, vid_filepath)
         
-        # Download audio
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_aud:
             aud_filepath = tmp_aud.name
         if audio_url:
-            urllib.request.urlretrieve(audio_url, aud_filepath)
+            download_file(audio_url, aud_filepath)
             
-        # Step 3
         time.sleep(0.5)
         bot.edit_message_text("██████████ 100%\n\n💥 𝐁𝐎𝐎𝐌! 💥", chat_id=message.chat.id, message_id=msg.message_id)
         
-        # Send Video
         with open(vid_filepath, 'rb') as video_file:
             bot.send_video(message.chat.id, video_file, caption=get_video_caption(title))
             
-        # Send Audio
         if audio_url:
             with open(aud_filepath, 'rb') as audio_file:
-                # Setting performer and title for the audio message to match standard layout
                 performer = "Unknown artist"
                 if data.get('data') and data['data'].get('music_info'):
                      performer = data['data']['music_info'].get('author', 'Unknown artist')
                 audio_title = "Original Audio"
-                
                 bot.send_audio(message.chat.id, audio_file, caption=get_audio_caption(), title=audio_title, performer=performer)
         
-        # Clean up
         os.remove(vid_filepath)
         if audio_url:
             os.remove(aud_filepath)
             
-        # Delete loading message after sending
         bot.delete_message(message.chat.id, msg.message_id)
         
     except Exception as e:
-        bot.edit_message_text(f"An error occurred. Please try again later.", chat_id=message.chat.id, message_id=msg.message_id)
+        bot.edit_message_text(f"An error occurred: {str(e)}\nPlease try again later.", chat_id=message.chat.id, message_id=msg.message_id)
 
 
 def run_bot():
