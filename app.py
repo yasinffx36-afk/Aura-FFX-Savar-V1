@@ -21,7 +21,7 @@ def send_welcome(message):
 
 def get_video_caption(title):
     caption = (
-        "┏ 📽 𝐏𝐑𝐄𝐌𝐈𝐔𝐌 𝐕𝐈𝐃𝐄𝐎 📽 ┓\n"
+        "┏ 📽 𝐓𝐢𝐤𝐓𝐨𝐤 𝐕𝐢𝐝𝐞𝐨 📽 ┓\n"
         "┗━━━━━━━━━━━━━━━┛\n\n"
         f"📝 𝐓𝐢𝐭𝐥𝐞: {title}\n"
         "🔥 𝐐𝐮𝐚𝐥𝐢𝐭𝐲: HD (No Watermark)\n\n"
@@ -31,7 +31,7 @@ def get_video_caption(title):
 
 def get_audio_caption():
     caption = (
-        "┏ 🎵 𝐏𝐑𝐄𝐌𝐈𝐔𝐌 𝐀𝐔𝐃𝐈𝐎 🎵 ┓\n"
+        "┏ 🎵 𝐓𝐢𝐤𝐓𝐨𝐤 𝐀𝐮𝐝𝐢𝐨 🎵 ┓\n"
         "┗━━━━━━━━━━━━━━━┛\n\n"
         "🎧 Original Soundtrack\n\n"
         "✨ 𝘋𝘰𝘸𝘯𝘭𝘰𝘢𝘥𝘦𝘥 𝘷𝘪𝘢 𝘈𝘶𝘳𝘢 𝘉𝘰𝘵 ⚡"
