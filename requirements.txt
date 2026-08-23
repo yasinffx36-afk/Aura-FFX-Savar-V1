@@ -1,5 +1,5 @@
-flask
-Flask-Cors
+pyTelegramBotAPI==4.16.1
+Flask==3.0.3
+requests==2.32.3
 yt-dlp
-gunicorn
-requests
+curl_cffi
