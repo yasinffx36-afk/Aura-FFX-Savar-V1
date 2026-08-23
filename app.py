@@ -2,8 +2,6 @@ import os
 import threading
 import tempfile
 import telebot
-import subprocess
-import glob
 from flask import Flask
 
 app = Flask(__name__)
@@ -38,6 +36,9 @@ def get_audio_caption():
     )
     return caption
 
+from telebot.types import InputMediaPhoto
+import requests
+
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     url = message.text.strip()
@@ -46,48 +47,89 @@ def handle_message(message):
         bot.reply_to(message, "Please send a valid TikTok link.")
         return
         
-    msg = bot.reply_to(message, "▒▒▒▒▒▒▒▒▒▒ 0% Loading...")
+    msg = bot.reply_to(message, "▒▒▒▒▒▒▒▒▒▒ 0% Fetching data...")
     
     try:
-        import time
-        bot.edit_message_text("█████▒▒▒▒▒ 50% Downloading...", chat_id=message.chat.id, message_id=msg.message_id)
+        bot.edit_message_text("█████▒▒▒▒▒ 50% Downloading media...", chat_id=message.chat.id, message_id=msg.message_id)
         
-        # Use yt-dlp to download BOTH video and audio in a single run to save time
+        # Use tikwm API for much faster processing and image support
+        api_url = f"https://www.tikwm.com/api/?url={requests.utils.quote(url)}&hd=1"
+        res = requests.get(api_url, headers={'User-Agent': 'Mozilla/5.0'}).json()
+        
+        if res.get('code') != 0:
+            bot.edit_message_text(f"API Error: {res.get('msg', 'Failed to fetch details.')}", chat_id=message.chat.id, message_id=msg.message_id)
+            return
+            
+        data = res.get('data', {})
+        title = data.get('title', 'TikTok Video')
+        images = data.get('images')
+        
         with tempfile.TemporaryDirectory() as tmpdir:
-            template = os.path.join(tmpdir, "%(title)s_%(format_id)s.%(ext)s")
-            # -f "best,bestaudio" tells yt-dlp to download both without restarting
-            subprocess.run(['yt-dlp', '--impersonate', 'chrome', url, '-f', 'best,bestaudio', '-o', template], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            bot.edit_message_text("██████████ 100%\n\n💥 𝐁𝐎𝐎𝐌! 💥 Uploading to Telegram...", chat_id=message.chat.id, message_id=msg.message_id)
             
-            # Find the downloaded video file
-            downloaded_vids = glob.glob(os.path.join(tmpdir, "*.mp4"))
-            if not downloaded_vids:
-                bot.edit_message_text("Failed to download video.", chat_id=message.chat.id, message_id=msg.message_id)
-                return
-            vid_filepath = downloaded_vids[0]
-            
-            # Extract title from filename
-            filename = os.path.basename(vid_filepath)
-            # Remove extension and the format_id (which is usually after the last underscore)
-            title = os.path.splitext(filename)[0].rsplit('_', 1)[0]
-            # Remove the ID part [12345] at the end if it exists
-            import re
-            title = re.sub(r'\s*\[\d+\]$', '', title)
-            
-            # Find the audio file
-            downloaded_auds = glob.glob(os.path.join(tmpdir, "*.mp3")) or glob.glob(os.path.join(tmpdir, "*.m4a"))
-            aud_filepath = downloaded_auds[0] if downloaded_auds else None
-            
-            bot.edit_message_text("██████████ 100%\n\n💥 𝐁𝐎𝐎𝐌! 💥", chat_id=message.chat.id, message_id=msg.message_id)
-            
-            with open(vid_filepath, 'rb') as video_file:
-                bot.send_video(message.chat.id, video_file, caption=get_video_caption(title))
+            if images and isinstance(images, list):
+                # Download images to tmpdir
+                media_group = []
+                opened_files = [] # To keep file references open until sent
                 
-            if aud_filepath:
-                with open(aud_filepath, 'rb') as audio_file:
-                    bot.send_audio(message.chat.id, audio_file, caption=get_audio_caption(), title="Original Audio", performer="Unknown artist")
+                for i, img_url in enumerate(images):
+                    img_path = os.path.join(tmpdir, f"img_{i}.jpg")
+                    r = requests.get(img_url)
+                    with open(img_path, 'wb') as f:
+                        f.write(r.content)
+                    
+                    file_obj = open(img_path, 'rb')
+                    opened_files.append(file_obj)
+                    
+                    if i == 0:
+                        media_group.append(InputMediaPhoto(file_obj, caption=get_video_caption(title)))
+                    else:
+                        media_group.append(InputMediaPhoto(file_obj))
+                        
+                # Telegram allows max 10 items in a media group
+                for i in range(0, len(media_group), 10):
+                    bot.send_media_group(message.chat.id, media_group[i:i+10])
+                
+                for f in opened_files:
+                    f.close()
+                
+                # Audio for images
+                audio_url = data.get('music')
+                if audio_url:
+                    aud_path = os.path.join(tmpdir, "audio.mp3")
+                    r = requests.get(audio_url)
+                    with open(aud_path, 'wb') as f:
+                        f.write(r.content)
+                    with open(aud_path, 'rb') as f:
+                        bot.send_audio(message.chat.id, f, caption=get_audio_caption(), title="Original Audio", performer="TikTok")
             
-            bot.delete_message(message.chat.id, msg.message_id)
-            
+            else:
+                # It's a Video
+                video_url = data.get('hdplay') or data.get('play')
+                audio_url = data.get('music')
+                
+                if video_url:
+                    vid_path = os.path.join(tmpdir, "video.mp4")
+                    r = requests.get(video_url, stream=True)
+                    with open(vid_path, 'wb') as f:
+                        for chunk in r.iter_content(chunk_size=8192):
+                            f.write(chunk)
+                    
+                    with open(vid_path, 'rb') as f:
+                        bot.send_video(message.chat.id, f, caption=get_video_caption(title))
+                        
+                if audio_url:
+                    aud_path = os.path.join(tmpdir, "audio.mp3")
+                    r = requests.get(audio_url, stream=True)
+                    with open(aud_path, 'wb') as f:
+                        for chunk in r.iter_content(chunk_size=8192):
+                            f.write(chunk)
+                    
+                    with open(aud_path, 'rb') as f:
+                        bot.send_audio(message.chat.id, f, caption=get_audio_caption(), title="Original Audio", performer="TikTok")
+                        
+        bot.delete_message(message.chat.id, msg.message_id)
+        
     except Exception as e:
         bot.edit_message_text(f"An error occurred: {str(e)}\nPlease try again later.", chat_id=message.chat.id, message_id=msg.message_id)
 
