@@ -57,7 +57,7 @@ def handle_message(message):
         with tempfile.TemporaryDirectory() as tmpdir:
             # Download video
             vid_template = os.path.join(tmpdir, "%(title)s.%(ext)s")
-            subprocess.run(['yt-dlp', url, '-o', vid_template], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(['yt-dlp', '--impersonate', 'chrome', url, '-o', vid_template], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             
             # Find the downloaded video file
             downloaded_vids = glob.glob(os.path.join(tmpdir, "*.mp4"))
@@ -78,7 +78,7 @@ def handle_message(message):
             
             # Download audio separately
             aud_template = os.path.join(tmpdir, "audio.%(ext)s")
-            subprocess.run(['yt-dlp', url, '-f', 'bestaudio', '-o', aud_template], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(['yt-dlp', '--impersonate', 'chrome', url, '-f', 'bestaudio', '-o', aud_template], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             downloaded_auds = glob.glob(os.path.join(tmpdir, "audio.*"))
             aud_filepath = downloaded_auds[0] if downloaded_auds else None
             
